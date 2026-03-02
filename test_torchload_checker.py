@@ -1,7 +1,7 @@
 """Tests for torchload-checker."""
 import tempfile
 import os
-from torchload_checker import scan_file, scan_repo, check_mitigations, Finding
+from torchload_checker import scan_file, scan_repo, check_mitigations, findings_to_sarif, Finding
 
 def _write_temp(content):
     """Write content to a temp .py file and return path."""
@@ -129,6 +129,19 @@ def test_detects_cpickle():
     os.unlink(path)
     assert len(findings) >= 1
     assert any("_pickle" in f.pattern for f in findings)
+
+
+def test_sarif_output():
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "vuln.py"), "w") as f:
+            f.write('model = torch.load("m.pt", weights_only=False)\ndata = pickle.load(open("d.pkl","rb"))\n')
+        findings = scan_repo(d)
+        sarif = findings_to_sarif(findings, d)
+        assert sarif["version"] == "2.1.0"
+        assert sarif["runs"][0]["tool"]["driver"]["name"] == "torchload-checker"
+        assert len(sarif["runs"][0]["results"]) == len(findings)
+        assert all("ruleId" in r for r in sarif["runs"][0]["results"])
+        assert len(sarif["runs"][0]["tool"]["driver"]["rules"]) > 0
 
 
 if __name__ == "__main__":

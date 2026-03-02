@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchload-checker"
-version = "0.2.0"
+version = "0.3.0"
 description = "Scan Python repos for unsafe torch.load() and pickle deserialization (CWE-502)"
 readme = "README.md"
 requires-python = ">=3.8"

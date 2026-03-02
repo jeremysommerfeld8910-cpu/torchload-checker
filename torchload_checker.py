@@ -217,17 +217,65 @@ def check_mitigations(repo_path: str) -> dict:
         results[name] = found
     return results
 
+def findings_to_sarif(findings: List[Finding], repo_path: str) -> dict:
+    """Convert findings to SARIF format for GitHub Code Scanning."""
+    sev_map = {"CRITICAL": "error", "HIGH": "error", "MEDIUM": "warning", "LOW": "note"}
+    rules = {}
+    results = []
+
+    for f in findings:
+        rule_id = f.pattern.replace(" ", "-").replace("(", "").replace(")", "").lower()
+        if rule_id not in rules:
+            rules[rule_id] = {
+                "id": rule_id,
+                "name": f.pattern,
+                "shortDescription": {"text": f.pattern},
+                "fullDescription": {"text": f.description},
+                "helpUri": "https://cwe.mitre.org/data/definitions/502.html",
+                "properties": {"tags": ["security", "CWE-502", "deserialization"]}
+            }
+
+        rel_path = os.path.relpath(f.file, repo_path)
+        results.append({
+            "ruleId": rule_id,
+            "level": sev_map.get(f.severity, "warning"),
+            "message": {"text": f"{f.description}\n\nCode: `{f.code}`"},
+            "locations": [{
+                "physicalLocation": {
+                    "artifactLocation": {"uri": rel_path},
+                    "region": {"startLine": f.line}
+                }
+            }]
+        })
+
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "torchload-checker",
+                    "version": "0.3.0",
+                    "informationUri": "https://github.com/jeremysommerfeld8910-cpu/torchload-checker",
+                    "rules": list(rules.values())
+                }
+            },
+            "results": results
+        }]
+    }
+
 def main():
     parser = argparse.ArgumentParser(description="Scan repos for unsafe deserialization (CWE-502)")
     parser.add_argument("path", help="Path to repository to scan")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--sarif", action="store_true", help="Output as SARIF for GitHub Code Scanning")
     parser.add_argument("--severity", default="LOW", choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
                         help="Minimum severity to report (default: LOW)")
     parser.add_argument("--exclude-tests", action="store_true",
                         help="Exclude test/, doc/, example/ directories and test_*.py files")
     parser.add_argument("--summary", action="store_true",
                         help="Show only summary counts by severity")
-    parser.add_argument("--version", action="version", version="torchload-checker 0.2.0")
+    parser.add_argument("--version", action="version", version="torchload-checker 0.3.0")
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):
@@ -238,7 +286,10 @@ def main():
     findings = scan_repo(args.path, args.severity, exclude_tests=exclude)
     mitigations = check_mitigations(args.path)
 
-    if args.json:
+    if args.sarif:
+        sarif = findings_to_sarif(findings, args.path)
+        print(json.dumps(sarif, indent=2))
+    elif args.json:
         output = {
             "repo": args.path,
             "total_findings": len(findings),
