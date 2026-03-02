@@ -40,7 +40,7 @@ PATTERNS = [
     },
     {
         "name": "torch.load(no weights_only)",
-        "regex": r"torch\.load\s*\([^)]*\)(?!.*weights_only)",
+        "regex": r"torch\.load\s*\((?!.*weights_only)[^)]*\)",
         "severity": "HIGH",
         "cwe": "CWE-502",
         "desc": "torch.load without weights_only parameter — defaults to unsafe in PyTorch <2.6"
@@ -169,6 +169,7 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--severity", default="LOW", choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
                         help="Minimum severity to report (default: LOW)")
+    parser.add_argument("--version", action="version", version="torchload-checker 0.1.0")
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):
