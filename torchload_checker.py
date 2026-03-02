@@ -140,6 +140,16 @@ MITIGATIONS = {
 SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '.tox', '.eggs', 'venv', '.venv', 'env'}
 TEST_DIRS = {'test', 'tests', 'testing', 'test_', 'doc', 'docs', 'examples', 'example', 'demo', 'demos', 'benchmark', 'benchmarks'}
 
+def _is_skip_line(stripped: str) -> bool:
+    """Check if a line should be skipped (comment, string def, etc.)."""
+    if stripped.startswith('#'):
+        return True
+    if re.match(r'^["\'].*["\'],?\s*$', stripped):
+        return True
+    if re.match(r'^\s*"(name|regex|desc|description|pattern)":', stripped):
+        return True
+    return False
+
 def scan_file(filepath: str) -> List[Finding]:
     findings = []
     try:
@@ -149,9 +159,11 @@ def scan_file(filepath: str) -> List[Finding]:
         return findings
 
     in_multiline_string = False
+    matched_lines = set()
+
+    # Pass 1: single-line pattern matching
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
-        # Track multi-line strings
         if stripped.startswith('"""') or stripped.startswith("'''"):
             delimiter = stripped[:3]
             if stripped.count(delimiter) == 1:
@@ -159,15 +171,11 @@ def scan_file(filepath: str) -> List[Finding]:
             continue
         if in_multiline_string:
             continue
-        if stripped.startswith('#'):
-            continue
-        # Skip lines that are purely string definitions (regex patterns, test strings)
-        if re.match(r'^["\'].*["\'],?\s*$', stripped):
-            continue
-        if re.match(r'^\s*"(name|regex|desc|description|pattern)":', stripped):
+        if _is_skip_line(stripped):
             continue
         for pat in PATTERNS:
             if re.search(pat["regex"], line):
+                matched_lines.add(i)
                 findings.append(Finding(
                     file=filepath,
                     line=i,
@@ -177,6 +185,55 @@ def scan_file(filepath: str) -> List[Finding]:
                     cwe=pat["cwe"],
                     description=pat["desc"]
                 ))
+
+    # Pass 2: multi-line call detection (join lines with unclosed parens)
+    in_multiline_string = False
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        lineno = i + 1
+
+        if stripped.startswith('"""') or stripped.startswith("'''"):
+            delimiter = stripped[:3]
+            if stripped.count(delimiter) == 1:
+                in_multiline_string = not in_multiline_string
+            i += 1
+            continue
+        if in_multiline_string or _is_skip_line(stripped):
+            i += 1
+            continue
+
+        # Check if line has an opening paren without a closing one (multi-line call)
+        open_count = line.count('(') - line.count(')')
+        if open_count > 0 and lineno not in matched_lines:
+            joined = line.rstrip('\n')
+            start_line = lineno
+            j = i + 1
+            while j < len(lines) and open_count > 0 and (j - i) < 10:
+                next_line = lines[j].strip()
+                if next_line.startswith('#'):
+                    j += 1
+                    continue
+                joined += ' ' + next_line
+                open_count += lines[j].count('(') - lines[j].count(')')
+                j += 1
+
+            for pat in PATTERNS:
+                if re.search(pat["regex"], joined):
+                    if start_line not in matched_lines:
+                        matched_lines.add(start_line)
+                        findings.append(Finding(
+                            file=filepath,
+                            line=start_line,
+                            pattern=pat["name"],
+                            code=stripped[:120],
+                            severity=pat["severity"],
+                            cwe=pat["cwe"],
+                            description=pat["desc"]
+                        ))
+        i += 1
+
     return findings
 
 def scan_repo(repo_path: str, min_severity: str = "LOW", exclude_tests: bool = False) -> List[Finding]:

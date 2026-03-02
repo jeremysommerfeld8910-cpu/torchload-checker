@@ -131,6 +131,24 @@ def test_detects_cpickle():
     assert any("_pickle" in f.pattern for f in findings)
 
 
+def test_detects_multiline_torch_load():
+    code = 'model = torch.load(\n    "model.pt",\n    map_location=device,\n    weights_only=False\n)'
+    path = _write_temp(code)
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) >= 1
+    assert any("weights_only=False" in f.pattern for f in findings)
+
+
+def test_detects_multiline_torch_load_no_weights_only():
+    code = 'checkpoint = torch.load(\n    filepath,\n    map_location="cpu"\n)'
+    path = _write_temp(code)
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) >= 1
+    assert any("no weights_only" in f.pattern for f in findings)
+
+
 def test_sarif_output():
     with tempfile.TemporaryDirectory() as d:
         with open(os.path.join(d, "vuln.py"), "w") as f:
