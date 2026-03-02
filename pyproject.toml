@@ -22,4 +22,4 @@ classifiers = [
 torchload-checker = "torchload_checker:main"
 
 [project.urls]
-Homepage = "https://github.com/epna-security/torchload-checker"
+Homepage = "https://github.com/jeremysommerfeld8910-cpu/torchload-checker"

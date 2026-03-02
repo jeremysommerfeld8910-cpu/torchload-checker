@@ -28,6 +28,15 @@ torchload-checker /path/to/repo --json
 
 # Only show HIGH and CRITICAL findings
 torchload-checker /path/to/repo --severity HIGH
+
+# Exclude test/example directories
+torchload-checker /path/to/repo --exclude-tests
+
+# Summary counts only
+torchload-checker /path/to/repo --summary
+
+# Version
+torchload-checker --version
 ```
 
 ## What It Detects
