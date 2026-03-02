@@ -108,6 +108,27 @@ PATTERNS = [
         "cwe": "CWE-502",
         "desc": "pandas.read_pickle uses pickle internally — unsafe with untrusted data"
     },
+    {
+        "name": "marshal.loads",
+        "regex": r"marshal\.loads?\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "marshal.loads can execute arbitrary code via crafted bytecode objects"
+    },
+    {
+        "name": "_pickle.loads",
+        "regex": r"_pickle\.(loads?|Unpickler)\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "C-accelerated pickle module — same deserialization risks as pickle"
+    },
+    {
+        "name": "torch.save(user data)",
+        "regex": r"torch\.save\s*\([^)]*request\.|torch\.save\s*\([^)]*user_|torch\.save\s*\([^)]*upload",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "torch.save with potentially user-controlled data — review data source"
+    },
 ]
 
 MITIGATIONS = {

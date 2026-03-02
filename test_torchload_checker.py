@@ -115,6 +115,22 @@ def test_detects_pandas_read_pickle():
     assert "pandas" in findings[0].pattern
 
 
+def test_detects_marshal_loads():
+    path = _write_temp('code = marshal.loads(data)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 1
+    assert "marshal" in findings[0].pattern
+
+
+def test_detects_cpickle():
+    path = _write_temp('obj = _pickle.loads(raw)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) >= 1
+    assert any("_pickle" in f.pattern for f in findings)
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])
