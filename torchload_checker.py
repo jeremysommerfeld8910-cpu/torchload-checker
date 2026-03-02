@@ -140,6 +140,12 @@ MITIGATIONS = {
 SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '.tox', '.eggs', 'venv', '.venv', 'env'}
 TEST_DIRS = {'test', 'tests', 'testing', 'test_', 'doc', 'docs', 'examples', 'example', 'demo', 'demos', 'benchmark', 'benchmarks'}
 
+SUPPRESS_MARKERS = {'# nosec', '# noqa: CWE-502', '# torchload-ignore'}
+
+def _is_suppressed(line: str) -> bool:
+    """Check if a line has an inline suppression comment."""
+    return any(marker in line for marker in SUPPRESS_MARKERS)
+
 def _is_skip_line(stripped: str) -> bool:
     """Check if a line should be skipped (comment, string def, etc.)."""
     if stripped.startswith('#'):
@@ -173,6 +179,8 @@ def scan_file(filepath: str) -> List[Finding]:
             continue
         if _is_skip_line(stripped):
             continue
+        if _is_suppressed(line):
+            continue
         for pat in PATTERNS:
             if re.search(pat["regex"], line):
                 matched_lines.add(i)
@@ -200,7 +208,7 @@ def scan_file(filepath: str) -> List[Finding]:
                 in_multiline_string = not in_multiline_string
             i += 1
             continue
-        if in_multiline_string or _is_skip_line(stripped):
+        if in_multiline_string or _is_skip_line(stripped) or _is_suppressed(line):
             i += 1
             continue
 

@@ -131,6 +131,20 @@ def test_detects_cpickle():
     assert any("_pickle" in f.pattern for f in findings)
 
 
+def test_suppression_nosec():
+    path = _write_temp('model = torch.load("m.pt", weights_only=False)  # nosec')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_suppression_torchload_ignore():
+    path = _write_temp('data = pickle.load(f)  # torchload-ignore')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
 def test_detects_multiline_torch_load():
     code = 'model = torch.load(\n    "model.pt",\n    map_location=device,\n    weights_only=False\n)'
     path = _write_temp(code)
