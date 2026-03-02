@@ -256,7 +256,7 @@ def scan_repo(repo_path: str, min_severity: str = "LOW", exclude_tests: bool = F
             continue
         if exclude_tests and any(t in py_file.parts for t in TEST_DIRS):
             continue
-        if exclude_tests and py_file.name.startswith("test_"):
+        if exclude_tests and (py_file.name.startswith("test_") or py_file.name.endswith("_test.py")):
             continue
         findings = scan_file(str(py_file))
         all_findings.extend(f for f in findings if sev_order.get(f.severity, 3) <= min_sev_val)

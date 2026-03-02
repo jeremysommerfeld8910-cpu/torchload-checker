@@ -176,6 +176,18 @@ def test_sarif_output():
         assert len(sarif["runs"][0]["tool"]["driver"]["rules"]) > 0
 
 
+def test_exclude_tests_suffix():
+    """Test that *_test.py files are excluded with --exclude-tests."""
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "model_test.py"), "w") as f:
+            f.write('pickle.load(f)\n')
+        with open(os.path.join(d, "main.py"), "w") as f:
+            f.write('pickle.load(f)\n')
+        findings = scan_repo(d, exclude_tests=True)
+        assert len(findings) == 1
+        assert "main.py" in findings[0].file
+
+
 def test_baseline_filtering():
     """Test that baseline mode filters out known findings."""
     import json
