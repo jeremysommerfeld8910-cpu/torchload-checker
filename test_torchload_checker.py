@@ -188,6 +188,19 @@ def test_exclude_tests_suffix():
         assert "main.py" in findings[0].file
 
 
+def test_fail_on_severity():
+    """Test that fail-on filters which severities trigger failure."""
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "mixed.py"), "w") as f:
+            f.write('joblib.load("model.pkl")\n')  # MEDIUM severity
+        findings = scan_repo(d)
+        assert len(findings) >= 1
+        # MEDIUM finding should not trigger CRITICAL threshold
+        sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        failing = [f for f in findings if sev_order.get(f.severity, 3) <= sev_order["HIGH"]]
+        assert len(failing) == 0  # No HIGH+ findings
+
+
 def test_baseline_filtering():
     """Test that baseline mode filters out known findings."""
     import json

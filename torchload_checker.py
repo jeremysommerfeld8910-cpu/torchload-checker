@@ -344,6 +344,9 @@ def main():
                         help="Baseline JSON file — only report new findings not in baseline")
     parser.add_argument("--save-baseline", metavar="FILE",
                         help="Save current findings as baseline JSON file")
+    parser.add_argument("--fail-on", default=None,
+                        choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                        help="Only exit non-zero if findings at this severity or above exist")
     parser.add_argument("--version", action="version", version="torchload-checker 0.4.0")
     args = parser.parse_args()
 
@@ -420,6 +423,11 @@ def main():
             print(f"    {name}: {status}")
         print()
 
+    if args.fail_on:
+        sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        threshold = sev_order[args.fail_on]
+        failing = [f for f in findings if sev_order.get(f.severity, 3) <= threshold]
+        sys.exit(1 if failing else 0)
     sys.exit(1 if findings else 0)
 
 if __name__ == "__main__":

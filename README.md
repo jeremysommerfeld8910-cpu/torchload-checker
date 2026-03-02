@@ -38,6 +38,9 @@ torchload-checker /path/to/repo --exclude-tests
 # Summary counts only
 torchload-checker /path/to/repo --summary
 
+# Only fail CI on CRITICAL or HIGH (ignore MEDIUM/LOW)
+torchload-checker /path/to/repo --fail-on HIGH
+
 # Save baseline (track existing findings)
 torchload-checker /path/to/repo --save-baseline baseline.json
 
