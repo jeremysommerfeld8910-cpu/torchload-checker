@@ -94,6 +94,20 @@ PATTERNS = [
         "cwe": "CWE-502",
         "desc": "shelve uses pickle internally — unsafe with untrusted data"
     },
+    {
+        "name": "numpy.load(allow_pickle=True)",
+        "regex": r"(?:np|numpy)\.load\s*\([^)]*allow_pickle\s*=\s*True",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "numpy.load with allow_pickle=True enables arbitrary code execution via pickle"
+    },
+    {
+        "name": "pandas.read_pickle",
+        "regex": r"(?:pd|pandas)\.read_pickle\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "pandas.read_pickle uses pickle internally — unsafe with untrusted data"
+    },
 ]
 
 MITIGATIONS = {
@@ -178,7 +192,7 @@ def main():
                         help="Exclude test/, doc/, example/ directories and test_*.py files")
     parser.add_argument("--summary", action="store_true",
                         help="Show only summary counts by severity")
-    parser.add_argument("--version", action="version", version="torchload-checker 0.1.0")
+    parser.add_argument("--version", action="version", version="torchload-checker 0.2.0")
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):

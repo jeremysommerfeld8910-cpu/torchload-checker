@@ -85,6 +85,22 @@ def test_severity_filter():
         assert all(f.severity in ("CRITICAL", "HIGH") for f in high_only)
 
 
+def test_detects_numpy_load_allow_pickle():
+    path = _write_temp('data = np.load("model.npy", allow_pickle=True)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 1
+    assert "numpy" in findings[0].pattern
+
+
+def test_detects_pandas_read_pickle():
+    path = _write_temp('df = pd.read_pickle("data.pkl")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 1
+    assert "pandas" in findings[0].pattern
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])

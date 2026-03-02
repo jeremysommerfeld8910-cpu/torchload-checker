@@ -52,6 +52,8 @@ torchload-checker --version
 | `joblib.load` | MEDIUM | Uses pickle internally |
 | `yaml.load` (unsafe) | HIGH | Without SafeLoader = RCE |
 | `shelve.open` | MEDIUM | Uses pickle internally |
+| `numpy.load(allow_pickle=True)` | HIGH | numpy pickle deserialization |
+| `pandas.read_pickle` | HIGH | Uses pickle internally |
 
 ## Mitigation Detection
 
