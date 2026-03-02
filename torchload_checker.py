@@ -129,6 +129,34 @@ PATTERNS = [
         "cwe": "CWE-502",
         "desc": "torch.save with potentially user-controlled data — review data source"
     },
+    {
+        "name": "tf.keras.models.load_model (unsafe)",
+        "regex": r"(?:tf\.keras|keras)\.models\.load_model\s*\([^)]*(?:compile\s*=\s*True|custom_objects)",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "Keras load_model with compile=True or custom_objects can execute arbitrary code via Lambda layers"
+    },
+    {
+        "name": "onnx.load (external data)",
+        "regex": r"onnx\.load\s*\([^)]*load_external_data\s*=\s*True",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "ONNX load with external data may load from untrusted file paths"
+    },
+    {
+        "name": "__reduce__ deserialization hook",
+        "regex": r"def\s+__reduce(?:_ex)?__\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Custom __reduce__ method — used by pickle for deserialization, potential RCE vector"
+    },
+    {
+        "name": "exec/eval in model loading",
+        "regex": r"(?:exec|eval)\s*\([^)]*(?:model|weight|checkpoint|ckpt|state_dict)",
+        "severity": "CRITICAL",
+        "cwe": "CWE-94",
+        "desc": "exec/eval with model-related data — direct code execution vulnerability"
+    },
 ]
 
 MITIGATIONS = {
@@ -320,7 +348,7 @@ def findings_to_sarif(findings: List[Finding], repo_path: str) -> dict:
             "tool": {
                 "driver": {
                     "name": "torchload-checker",
-                    "version": "0.4.0",
+                    "version": "0.5.0",
                     "informationUri": "https://github.com/jeremysommerfeld8910-cpu/torchload-checker",
                     "rules": list(rules.values())
                 }
@@ -347,7 +375,7 @@ def main():
     parser.add_argument("--fail-on", default=None,
                         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
                         help="Only exit non-zero if findings at this severity or above exist")
-    parser.add_argument("--version", action="version", version="torchload-checker 0.4.0")
+    parser.add_argument("--version", action="version", version="torchload-checker 0.5.0")
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):
