@@ -103,6 +103,7 @@ MITIGATIONS = {
 }
 
 SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '.tox', '.eggs', 'venv', '.venv', 'env'}
+TEST_DIRS = {'test', 'tests', 'testing', 'test_', 'doc', 'docs', 'examples', 'example', 'demo', 'demos', 'benchmark', 'benchmarks'}
 
 def scan_file(filepath: str) -> List[Finding]:
     findings = []
@@ -129,7 +130,7 @@ def scan_file(filepath: str) -> List[Finding]:
                 ))
     return findings
 
-def scan_repo(repo_path: str, min_severity: str = "LOW") -> List[Finding]:
+def scan_repo(repo_path: str, min_severity: str = "LOW", exclude_tests: bool = False) -> List[Finding]:
     sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
     min_sev_val = sev_order.get(min_severity.upper(), 3)
 
@@ -138,6 +139,10 @@ def scan_repo(repo_path: str, min_severity: str = "LOW") -> List[Finding]:
 
     for py_file in repo.rglob("*.py"):
         if any(skip in py_file.parts for skip in SKIP_DIRS):
+            continue
+        if exclude_tests and any(t in py_file.parts for t in TEST_DIRS):
+            continue
+        if exclude_tests and py_file.name.startswith("test_"):
             continue
         findings = scan_file(str(py_file))
         all_findings.extend(f for f in findings if sev_order.get(f.severity, 3) <= min_sev_val)
@@ -169,6 +174,10 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--severity", default="LOW", choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
                         help="Minimum severity to report (default: LOW)")
+    parser.add_argument("--exclude-tests", action="store_true",
+                        help="Exclude test/, doc/, example/ directories and test_*.py files")
+    parser.add_argument("--summary", action="store_true",
+                        help="Show only summary counts by severity")
     parser.add_argument("--version", action="version", version="torchload-checker 0.1.0")
     args = parser.parse_args()
 
@@ -176,7 +185,8 @@ def main():
         print(f"Error: {args.path} is not a directory", file=sys.stderr)
         sys.exit(1)
 
-    findings = scan_repo(args.path, args.severity)
+    exclude = getattr(args, 'exclude_tests', False)
+    findings = scan_repo(args.path, args.severity, exclude_tests=exclude)
     mitigations = check_mitigations(args.path)
 
     if args.json:
@@ -187,6 +197,17 @@ def main():
             "mitigations": mitigations
         }
         print(json.dumps(output, indent=2))
+    elif args.summary:
+        sev_counts = {}
+        for f in findings:
+            sev_counts[f.severity] = sev_counts.get(f.severity, 0) + 1
+        print(f"torchload-checker: {args.path}")
+        print(f"  Total: {len(findings)} findings")
+        for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+            if sev in sev_counts:
+                print(f"  {sev}: {sev_counts[sev]}")
+        for name, found in mitigations.items():
+            print(f"  {name}: {'YES' if found else 'NO'}")
     else:
         print(f"\n{'='*60}")
         print(f"  torchload-checker — CWE-502 Scanner")
