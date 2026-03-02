@@ -1,0 +1,59 @@
+name: CWE-502 Security Scan
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  torchload-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install torchload-checker
+        run: pip install torchload-checker
+
+      - name: Run CWE-502 scan
+        id: scan
+        run: |
+          torchload-checker . --severity HIGH --json > scan-results.json 2>&1 || true
+          FINDINGS=$(python3 -c "import json; d=json.load(open('scan-results.json')); print(d['total_findings'])")
+          echo "findings=$FINDINGS" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.scan.outputs.findings != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('scan-results.json', 'utf8'));
+            let body = `## CWE-502 Security Scan Results\n\n`;
+            body += `Found **${results.total_findings}** unsafe deserialization pattern(s).\n\n`;
+            for (const f of results.findings.slice(0, 10)) {
+              body += `- **[${f.severity}]** \`${f.file}:${f.line}\` — ${f.pattern}\n`;
+            }
+            if (results.findings.length > 10) {
+              body += `\n... and ${results.findings.length - 10} more.\n`;
+            }
+            body += `\n*Scanned by [torchload-checker](https://github.com/epna-security/torchload-checker)*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Fail on CRITICAL findings
+        if: steps.scan.outputs.findings != '0'
+        run: |
+          CRITICAL=$(python3 -c "import json; d=json.load(open('scan-results.json')); print(sum(1 for f in d['findings'] if f['severity']=='CRITICAL'))")
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "CRITICAL findings detected — failing build"
+            exit 1
+          fi

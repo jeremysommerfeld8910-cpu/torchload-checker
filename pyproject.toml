@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchload-checker"
+version = "0.1.0"
+description = "Scan Python repos for unsafe torch.load() and pickle deserialization (CWE-502)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name = "EPNA Security", email = "jeremysommerfeld8910@gmail.com"}]
+keywords = ["security", "pytorch", "pickle", "deserialization", "CWE-502", "vulnerability-scanner"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+torchload-checker = "torchload_checker:main"
+
+[project.urls]
+Homepage = "https://github.com/epna-security/torchload-checker"
