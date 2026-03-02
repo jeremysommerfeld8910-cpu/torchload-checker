@@ -9,7 +9,7 @@
 
 `torch.load()` uses `pickle` under the hood, which can execute arbitrary code during deserialization. This is [CWE-502](https://cwe.mitre.org/data/definitions/502.html) — one of the most dangerous vulnerability classes in ML/AI codebases.
 
-PyTorch added `weights_only=True` as a safe default in v2.6, but thousands of repos still use the unsafe pattern. We've found **128+ unsafe deserialization patterns** across major ML projects.
+PyTorch added `weights_only=True` as a safe default in v2.6, but thousands of repos still use the unsafe pattern. We've found **160+ unsafe deserialization patterns** across major ML projects including GPT-SoVITS, Coqui TTS, EasyOCR, and vllm.
 
 ## Install
 
@@ -25,6 +25,9 @@ torchload-checker /path/to/repo
 
 # JSON output for CI/CD
 torchload-checker /path/to/repo --json
+
+# SARIF output for GitHub Code Scanning
+torchload-checker /path/to/repo --sarif > results.sarif
 
 # Only show HIGH and CRITICAL findings
 torchload-checker /path/to/repo --severity HIGH
@@ -54,6 +57,9 @@ torchload-checker --version
 | `shelve.open` | MEDIUM | Uses pickle internally |
 | `numpy.load(allow_pickle=True)` | HIGH | numpy pickle deserialization |
 | `pandas.read_pickle` | HIGH | Uses pickle internally |
+| `marshal.loads` | HIGH | Arbitrary code via bytecode |
+| `_pickle.loads/Unpickler` | HIGH | C-accelerated pickle (same risks) |
+| `torch.save(user data)` | MEDIUM | User-controlled data in save path |
 
 ## Mitigation Detection
 
@@ -80,19 +86,27 @@ jobs:
           python-version: '3.11'
       - run: pip install torchload-checker
       - run: torchload-checker . --severity HIGH --json > results.json
+
+      # Or upload SARIF to GitHub Code Scanning
+      - run: torchload-checker . --sarif > results.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
 ```
 
 ## Real-World Findings
 
 Found unsafe patterns in major ML projects:
 
-| Project | Findings | Severity |
-|---------|----------|----------|
-| vllm | 41 | HIGH-CRITICAL |
-| mlflow | 39 | HIGH |
-| BentoML | 34 | HIGH |
-| V-JEPA (Meta) | 11 | HIGH |
-| I-JEPA (Meta) | 3 | HIGH |
+| Project | Stars | Findings | Severity |
+|---------|-------|----------|----------|
+| GPT-SoVITS | 55K | 46 | 22 CRITICAL + 24 HIGH |
+| huggingface/transformers | 145K | 44 | 7 CRITICAL + 37 HIGH |
+| vllm | 72K | 17 | HIGH |
+| coqui-ai/TTS | 45K | 24 | HIGH |
+| EasyOCR | 29K | 13 | 4 CRITICAL + 9 HIGH |
+| GFPGAN | 37K | 8 | HIGH |
+| Real-ESRGAN | 34K | 8 | HIGH |
 
 ## License
 
