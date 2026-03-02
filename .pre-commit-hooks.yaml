@@ -1,0 +1,8 @@
+- id: torchload-checker
+  name: torchload-checker (CWE-502)
+  description: Scan for unsafe torch.load(), pickle, and deserialization patterns
+  entry: python3 torchload_checker.py
+  language: python
+  types: [python]
+  args: [., --exclude-tests, --severity, HIGH]
+  pass_filenames: false

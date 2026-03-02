@@ -320,7 +320,7 @@ def findings_to_sarif(findings: List[Finding], repo_path: str) -> dict:
             "tool": {
                 "driver": {
                     "name": "torchload-checker",
-                    "version": "0.3.0",
+                    "version": "0.4.0",
                     "informationUri": "https://github.com/jeremysommerfeld8910-cpu/torchload-checker",
                     "rules": list(rules.values())
                 }
@@ -340,7 +340,11 @@ def main():
                         help="Exclude test/, doc/, example/ directories and test_*.py files")
     parser.add_argument("--summary", action="store_true",
                         help="Show only summary counts by severity")
-    parser.add_argument("--version", action="version", version="torchload-checker 0.3.0")
+    parser.add_argument("--baseline", metavar="FILE",
+                        help="Baseline JSON file — only report new findings not in baseline")
+    parser.add_argument("--save-baseline", metavar="FILE",
+                        help="Save current findings as baseline JSON file")
+    parser.add_argument("--version", action="version", version="torchload-checker 0.4.0")
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):
@@ -350,6 +354,26 @@ def main():
     exclude = getattr(args, 'exclude_tests', False)
     findings = scan_repo(args.path, args.severity, exclude_tests=exclude)
     mitigations = check_mitigations(args.path)
+
+    # Save baseline if requested
+    if args.save_baseline:
+        baseline_data = [{"file": os.path.relpath(f.file, args.path), "line": f.line,
+                          "pattern": f.pattern} for f in findings]
+        with open(args.save_baseline, 'w') as bf:
+            json.dump(baseline_data, bf, indent=2)
+        print(f"Saved baseline with {len(baseline_data)} findings to {args.save_baseline}")
+        sys.exit(0)
+
+    # Filter against baseline if provided
+    if args.baseline:
+        try:
+            with open(args.baseline) as bf:
+                baseline = json.load(bf)
+            baseline_keys = {(b["file"], b["pattern"]) for b in baseline}
+            findings = [f for f in findings
+                        if (os.path.relpath(f.file, args.path), f.pattern) not in baseline_keys]
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            print(f"Warning: Could not load baseline {args.baseline}: {e}", file=sys.stderr)
 
     if args.sarif:
         sarif = findings_to_sarif(findings, args.path)

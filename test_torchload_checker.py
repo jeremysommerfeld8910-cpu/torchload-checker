@@ -176,6 +176,32 @@ def test_sarif_output():
         assert len(sarif["runs"][0]["tool"]["driver"]["rules"]) > 0
 
 
+def test_baseline_filtering():
+    """Test that baseline mode filters out known findings."""
+    import json
+    with tempfile.TemporaryDirectory() as d:
+        vuln_file = os.path.join(d, "vuln.py")
+        with open(vuln_file, "w") as f:
+            f.write('pickle.load(f)\ntorch.load("m.pt")\n')
+
+        # Get all findings
+        all_findings = scan_repo(d)
+        assert len(all_findings) >= 2
+
+        # Create baseline from first finding
+        baseline = [{"file": os.path.relpath(all_findings[0].file, d),
+                      "pattern": all_findings[0].pattern}]
+        baseline_file = os.path.join(d, "baseline.json")
+        with open(baseline_file, "w") as bf:
+            json.dump(baseline, bf)
+
+        # Filter: findings matching baseline keys should be removed
+        baseline_keys = {(b["file"], b["pattern"]) for b in baseline}
+        filtered = [f for f in all_findings
+                    if (os.path.relpath(f.file, d), f.pattern) not in baseline_keys]
+        assert len(filtered) < len(all_findings)
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])

@@ -38,6 +38,12 @@ torchload-checker /path/to/repo --exclude-tests
 # Summary counts only
 torchload-checker /path/to/repo --summary
 
+# Save baseline (track existing findings)
+torchload-checker /path/to/repo --save-baseline baseline.json
+
+# Only report NEW findings not in baseline
+torchload-checker /path/to/repo --baseline baseline.json
+
 # Version
 torchload-checker --version
 ```
@@ -68,9 +74,32 @@ torchload-checker also detects when repos use safe alternatives:
 - `weights_only=True` parameter
 - `yaml.SafeLoader` / `yaml.safe_load`
 
+## Baseline Mode (Incremental CI)
+
+Adopt torchload-checker incrementally — prevent new issues without fixing all existing ones:
+
+```bash
+# Step 1: Record current findings as baseline
+torchload-checker /path/to/repo --save-baseline baseline.json
+
+# Step 2: In CI, only fail on NEW findings
+torchload-checker /path/to/repo --baseline baseline.json --severity HIGH
+```
+
 ## GitHub Action
 
-Add to `.github/workflows/scan.yml`:
+Use as a reusable action:
+
+```yaml
+- uses: jeremysommerfeld8910-cpu/torchload-checker@v0.4.0
+  with:
+    path: .
+    severity: HIGH
+    exclude-tests: true
+    sarif: true
+```
+
+Or with pip install:
 
 ```yaml
 name: CWE-502 Security Scan
@@ -87,11 +116,23 @@ jobs:
       - run: pip install torchload-checker
       - run: torchload-checker . --severity HIGH --json > results.json
 
-      # Or upload SARIF to GitHub Code Scanning
-      - run: torchload-checker . --sarif > results.sarif
+      # Upload SARIF to GitHub Code Scanning
+      - run: torchload-checker . --sarif > results.sarif || true
       - uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
           sarif_file: results.sarif
+```
+
+## Pre-commit Hook
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/jeremysommerfeld8910-cpu/torchload-checker
+    rev: v0.4.0
+    hooks:
+      - id: torchload-checker
 ```
 
 ## Real-World Findings

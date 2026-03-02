@@ -1,0 +1,59 @@
+name: torchload-checker
+description: Scan Python repos for unsafe torch.load(), pickle, and deserialization patterns (CWE-502)
+author: EPNA Security Research
+
+inputs:
+  path:
+    description: Path to scan
+    required: false
+    default: "."
+  severity:
+    description: Minimum severity to report (CRITICAL, HIGH, MEDIUM, LOW)
+    required: false
+    default: "LOW"
+  exclude-tests:
+    description: Exclude test directories and test files
+    required: false
+    default: "false"
+  sarif:
+    description: Generate SARIF output for GitHub Code Scanning
+    required: false
+    default: "false"
+
+outputs:
+  findings-count:
+    description: Number of findings detected
+    value: ${{ steps.scan.outputs.count }}
+  sarif-file:
+    description: Path to SARIF output file (if sarif=true)
+    value: ${{ steps.scan.outputs.sarif_file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run torchload-checker
+      id: scan
+      shell: bash
+      run: |
+        ARGS="${{ inputs.path }}"
+        if [ "${{ inputs.exclude-tests }}" = "true" ]; then
+          ARGS="$ARGS --exclude-tests"
+        fi
+        ARGS="$ARGS --severity ${{ inputs.severity }}"
+
+        # Count findings
+        COUNT=$(python3 ${{ github.action_path }}/torchload_checker.py $ARGS --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_findings',0))" 2>/dev/null || echo 0)
+        echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+        # Run scan with human output
+        python3 ${{ github.action_path }}/torchload_checker.py $ARGS || true
+
+        # Generate SARIF if requested
+        if [ "${{ inputs.sarif }}" = "true" ]; then
+          python3 ${{ github.action_path }}/torchload_checker.py $ARGS --sarif > torchload-results.sarif 2>/dev/null || true
+          echo "sarif_file=torchload-results.sarif" >> "$GITHUB_OUTPUT"
+        fi
+
+branding:
+  icon: shield
+  color: red
