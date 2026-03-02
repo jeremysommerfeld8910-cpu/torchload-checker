@@ -21,5 +21,8 @@ classifiers = [
 [project.scripts]
 torchload-checker = "torchload_checker:main"
 
+[tool.setuptools]
+py-modules = ["torchload_checker"]
+
 [project.urls]
 Homepage = "https://github.com/jeremysommerfeld8910-cpu/torchload-checker"
