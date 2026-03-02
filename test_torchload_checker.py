@@ -85,6 +85,20 @@ def test_severity_filter():
         assert all(f.severity in ("CRITICAL", "HIGH") for f in high_only)
 
 
+def test_skips_string_definitions():
+    path = _write_temp('"name": "torch.load(weights_only=False)",\n"regex": r"pickle\\.load"')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_skips_multiline_strings():
+    path = _write_temp('"""\ntorch.load(model, weights_only=False)\npickle.load(f)\n"""')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
 def test_detects_numpy_load_allow_pickle():
     path = _write_temp('data = np.load("model.npy", allow_pickle=True)')
     findings = scan_file(path)

@@ -127,9 +127,23 @@ def scan_file(filepath: str) -> List[Finding]:
     except (PermissionError, IsADirectoryError):
         return findings
 
+    in_multiline_string = False
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
-        if stripped.startswith('#') or stripped.startswith('"""') or stripped.startswith("'''"):
+        # Track multi-line strings
+        if stripped.startswith('"""') or stripped.startswith("'''"):
+            delimiter = stripped[:3]
+            if stripped.count(delimiter) == 1:
+                in_multiline_string = not in_multiline_string
+            continue
+        if in_multiline_string:
+            continue
+        if stripped.startswith('#'):
+            continue
+        # Skip lines that are purely string definitions (regex patterns, test strings)
+        if re.match(r'^["\'].*["\'],?\s*$', stripped):
+            continue
+        if re.match(r'^\s*"(name|regex|desc|description|pattern)":', stripped):
             continue
         for pat in PATTERNS:
             if re.search(pat["regex"], line):
