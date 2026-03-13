@@ -82,7 +82,7 @@ PATTERNS = [
     },
     {
         "name": "yaml.load (unsafe)",
-        "regex": r"yaml\.load\s*\([^)]*\)(?!.*Loader\s*=\s*yaml\.SafeLoader)",
+        "regex": r"yaml\.load\s*\((?![^)]*Loader\s*=\s*yaml\.(?:Safe|CSafe)Loader)[^)]*\)",
         "severity": "HIGH",
         "cwe": "CWE-502",
         "desc": "yaml.load without SafeLoader allows arbitrary code execution"
@@ -157,6 +157,167 @@ PATTERNS = [
         "cwe": "CWE-94",
         "desc": "exec/eval with model-related data — direct code execution vulnerability"
     },
+    {
+        "name": "scipy.io.loadmat",
+        "regex": r"scipy\.io\.loadmat\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "scipy.io.loadmat can deserialize pickle objects embedded in .mat files"
+    },
+    {
+        "name": "torch.package import",
+        "regex": r"torch\.package\.PackageImporter\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "torch.package imports can execute arbitrary Python code from untrusted .pt archives"
+    },
+    {
+        "name": "transformers pipeline (trust_remote_code)",
+        "regex": r"(?:pipeline|from_pretrained)\s*\([^)]*trust_remote_code\s*=\s*True",
+        "severity": "CRITICAL",
+        "cwe": "CWE-94",
+        "desc": "trust_remote_code=True allows execution of arbitrary code from HuggingFace Hub models"
+    },
+    {
+        "name": "jsonpickle.decode",
+        "regex": r"jsonpickle\.decode\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "jsonpickle.decode can instantiate arbitrary objects — equivalent to pickle.loads for JSON"
+    },
+    {
+        "name": "catboost.CatBoost.load_model",
+        "regex": r"(?:catboost|CatBoost|CatBoostClassifier|CatBoostRegressor)\.load_model\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "CatBoost model loading may deserialize untrusted model files"
+    },
+    {
+        "name": "zipfile extract (model files)",
+        "regex": r"(?:ZipFile|zipfile)\s*\([^)]*\)\.(?:extract|extractall)\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-22",
+        "desc": "Zip extraction without path validation — potential path traversal in model archives (Zip Slip)"
+    },
+    {
+        "name": "torch.jit.load",
+        "regex": r"torch\.jit\.load\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "TorchScript loading can execute arbitrary code via custom operators and __reduce__-based payloads"
+    },
+    {
+        "name": "tf.saved_model.load",
+        "regex": r"tf\.saved_model\.load\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "TensorFlow SavedModel can contain arbitrary ops — verify model source is trusted"
+    },
+    {
+        "name": "sklearn model via pickle",
+        "regex": r"(?:sklearn|joblib)\..*(?:load|dump)\s*\(.*\.pkl",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "scikit-learn models serialized via pickle/joblib — unsafe with untrusted .pkl files"
+    },
+    {
+        "name": "onnxruntime InferenceSession",
+        "regex": r"onnxruntime\.InferenceSession\s*\([^)]*(?:custom_op|register)",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "ONNX Runtime with custom operators can load and execute arbitrary shared libraries"
+    },
+    {
+        "name": "safetensors disabled/bypassed",
+        "regex": r"use_safetensors\s*=\s*False",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "Explicitly disabling safetensors forces fallback to unsafe pickle-based loading"
+    },
+    {
+        "name": "torch.hub.load (untrusted repo)",
+        "regex": r"torch\.hub\.load\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "torch.hub.load downloads and executes code from GitHub repos — verify repo is trusted"
+    },
+    {
+        "name": "lightning load_from_checkpoint",
+        "regex": r"\.load_from_checkpoint\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "PyTorch Lightning load_from_checkpoint uses pickle internally — unsafe with untrusted checkpoints"
+    },
+    {
+        "name": "xgboost pickle model load",
+        "regex": r"(?:xgb|xgboost)\.Booster\s*\([^)]*model_file|pickle\.load.*\.(?:xgb|bst)",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "XGBoost model loading may use pickle format — verify model source is trusted"
+    },
+    {
+        "name": "accelerate load_checkpoint",
+        "regex": r"load_checkpoint_and_dispatch\s*\(|load_checkpoint_in_model\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "HuggingFace Accelerate checkpoint loading can deserialize pickle-based model files"
+    },
+    {
+        "name": "cPickle.load/loads",
+        "regex": r"cPickle\.(load|loads)\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "cPickle (Python 2 C-accelerated pickle) allows arbitrary code execution via deserialization"
+    },
+    {
+        "name": "torch.utils.model_zoo.load_url",
+        "regex": r"torch\.utils\.model_zoo\.load_url\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "model_zoo.load_url downloads and deserializes models from URLs via pickle"
+    },
+    {
+        "name": "mmcv/mmengine.load (pickle)",
+        "regex": r"(?:mmcv|mmengine)\.(?:load|FileClient)\s*\([^)]*\.(?:pkl|pickle|pth)",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "OpenMMLab mmcv/mmengine.load uses pickle for .pkl/.pth files — unsafe with untrusted data"
+    },
+    {
+        "name": "paddle.load",
+        "regex": r"paddle\.load\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "PaddlePaddle paddle.load uses pickle by default — unsafe with untrusted model files"
+    },
+    {
+        "name": "mlflow model load",
+        "regex": r"mlflow\.(?:pytorch|sklearn|pyfunc|tensorflow|keras)\.load_model\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "MLflow model loading may deserialize pickle-based artifacts from untrusted sources"
+    },
+    {
+        "name": "bentoml model load",
+        "regex": r"bentoml\.(?:pytorch|sklearn|picklable_model)\.(?:load_model|load_runner)\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "BentoML model loading may use pickle internally for model deserialization"
+    },
+    {
+        "name": "ray checkpoint load",
+        "regex": r"(?:Checkpoint\.from_directory|load_checkpoint)\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Ray/Tune checkpoint loading may deserialize pickle-based model state"
+    },
+    {
+        "name": "torch.load map_location with URL",
+        "regex": r"torch\.load\s*\([^)]*(?:http://|https://|ftp://)",
+        "severity": "CRITICAL",
+        "cwe": "CWE-502",
+        "desc": "torch.load from URL — loading untrusted remote model enables arbitrary code execution"
+    },
 ]
 
 MITIGATIONS = {
@@ -175,12 +336,18 @@ def _is_suppressed(line: str) -> bool:
     return any(marker in line for marker in SUPPRESS_MARKERS)
 
 def _is_skip_line(stripped: str) -> bool:
-    """Check if a line should be skipped (comment, string def, etc.)."""
+    """Check if a line should be skipped (comment, string def, logging, etc.)."""
     if stripped.startswith('#'):
         return True
     if re.match(r'^["\'].*["\'],?\s*$', stripped):
         return True
     if re.match(r'^\s*"(name|regex|desc|description|pattern)":', stripped):
+        return True
+    # Skip logging/print statements that merely mention patterns
+    if re.match(r'^\s*(?:logger|logging)\.\w+\s*\(', stripped):
+        return True
+    # Skip raise/assert statements referencing patterns in error messages
+    if re.match(r'^\s*raise\s+\w+Error\s*\(["\']', stripped):
         return True
     return False
 
@@ -348,7 +515,7 @@ def findings_to_sarif(findings: List[Finding], repo_path: str) -> dict:
             "tool": {
                 "driver": {
                     "name": "torchload-checker",
-                    "version": "0.5.0",
+                    "version": "0.8.0",
                     "informationUri": "https://github.com/jeremysommerfeld8910-cpu/torchload-checker",
                     "rules": list(rules.values())
                 }
@@ -375,7 +542,7 @@ def main():
     parser.add_argument("--fail-on", default=None,
                         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
                         help="Only exit non-zero if findings at this severity or above exist")
-    parser.add_argument("--version", action="version", version="torchload-checker 0.5.0")
+    parser.add_argument("--version", action="version", version="torchload-checker 0.8.0")
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):

