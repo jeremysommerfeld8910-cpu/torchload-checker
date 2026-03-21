@@ -11,14 +11,17 @@ Usage:
     python3 torchload_checker.py /path/to/repo --severity high
 """
 
+__version__ = "0.11.0"
+
 import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from typing import List
+from typing import List, Optional
 
 @dataclass
 class Finding:
@@ -47,28 +50,28 @@ PATTERNS = [
     },
     {
         "name": "pickle.load/loads",
-        "regex": r"pickle\.(load|loads)\s*\(",
+        "regex": r"(?<!\w)pickle\.(load|loads)\s*\(",
         "severity": "HIGH",
         "cwe": "CWE-502",
         "desc": "Direct pickle deserialization allows arbitrary code execution"
     },
     {
         "name": "pickle.Unpickler",
-        "regex": r"pickle\.Unpickler\s*\(",
+        "regex": r"(?<!\w)pickle\.Unpickler\s*\(",
         "severity": "HIGH",
         "cwe": "CWE-502",
         "desc": "Pickle Unpickler can execute arbitrary code during deserialization"
     },
     {
         "name": "cloudpickle.load/loads",
-        "regex": r"cloudpickle\.(load|loads)\s*\(",
+        "regex": r"(?<!\w)cloudpickle\.(load|loads)\s*\(",
         "severity": "HIGH",
         "cwe": "CWE-502",
         "desc": "cloudpickle deserialization allows arbitrary code execution"
     },
     {
         "name": "dill.load/loads",
-        "regex": r"dill\.(load|loads)\s*\(",
+        "regex": r"(?<!\w)dill\.(load|loads)\s*\(",
         "severity": "HIGH",
         "cwe": "CWE-502",
         "desc": "dill deserialization allows arbitrary code execution"
@@ -117,7 +120,7 @@ PATTERNS = [
     },
     {
         "name": "_pickle.loads",
-        "regex": r"_pickle\.(loads?|Unpickler)\s*\(",
+        "regex": r"(?<!\w)_pickle\.(loads?|Unpickler)\s*\(",
         "severity": "HIGH",
         "cwe": "CWE-502",
         "desc": "C-accelerated pickle module — same deserialization risks as pickle"
@@ -318,6 +321,132 @@ PATTERNS = [
         "cwe": "CWE-502",
         "desc": "torch.load from URL — loading untrusted remote model enables arbitrary code execution"
     },
+    {
+        "name": "hickle.load",
+        "regex": r"hickle\.load\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "hickle.load uses pickle internally for non-native types — unsafe with untrusted HDF5 files"
+    },
+    {
+        "name": "torch.load(pickle_module)",
+        "regex": r"torch\.load\s*\([^)]*pickle_module\s*=",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "torch.load with custom pickle_module — may bypass safety checks or introduce custom deserialization"
+    },
+    {
+        "name": "keras.models.load_model (generic)",
+        "regex": r"(?:tf\.keras|keras)\.models\.load_model\s*\([^)]*(?:\.h5|\.keras|\.hdf5)",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Keras load_model from file — models with Lambda layers can execute arbitrary code"
+    },
+    {
+        "name": "skops.io.load (no trusted)",
+        "regex": r"skops\.io\.load\s*\((?!.*trusted)[^)]*\)",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "skops.io.load without trusted types list — allows deserialization of arbitrary sklearn objects"
+    },
+    {
+        "name": "wandb artifact download + pickle",
+        "regex": r"wandb\.(?:Api\(\)|init).*\.download|wandb\.restore\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "WandB artifact download — models may be pickle-serialized from untrusted sources"
+    },
+    {
+        "name": "torch.distributed.checkpoint.load",
+        "regex": r"torch\.distributed\.checkpoint\.load\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "Distributed checkpoint loading may deserialize pickle-based model shards"
+    },
+    {
+        "name": "keras Lambda layer in model",
+        "regex": r"keras\.layers\.Lambda\s*\(|Lambda\s*\(\s*lambda",
+        "severity": "MEDIUM",
+        "cwe": "CWE-94",
+        "desc": "Keras Lambda layers execute arbitrary code — models with Lambda layers are unsafe to load from untrusted sources"
+    },
+    {
+        "name": "huggingface auto_model (trust_remote_code)",
+        "regex": r"Auto(?:Model|Tokenizer|Config|Feature)(?:ForCausalLM|ForSequenceClassification|ForTokenClassification)?\.from_pretrained\s*\([^)]*trust_remote_code\s*=\s*True",
+        "severity": "CRITICAL",
+        "cwe": "CWE-94",
+        "desc": "HuggingFace Auto class with trust_remote_code=True executes arbitrary code from model repos"
+    },
+    {
+        "name": "gradio.load (remote)",
+        "regex": r"gr(?:adio)?\.load\s*\([^)]*(?:http|huggingface|spaces/)",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Gradio.load from remote space/URL may execute untrusted code from remote model endpoints"
+    },
+    {
+        "name": "transformers.utils.hub.cached_file (legacy)",
+        "regex": r"cached_file\s*\([^)]*\.bin",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Loading .bin model files via cached_file uses pickle — prefer .safetensors format"
+    },
+    {
+        "name": "vllm model load (trust_remote_code)",
+        "regex": r"(?:LLM|AsyncLLMEngine|EngineArgs)\s*\([^)]*trust_remote_code\s*=\s*True",
+        "severity": "CRITICAL",
+        "cwe": "CWE-94",
+        "desc": "vLLM with trust_remote_code=True executes arbitrary code from HuggingFace model repos"
+    },
+    {
+        "name": "diffusers from_pretrained (trust_remote_code)",
+        "regex": r"\.from_pretrained\s*\([^)]*trust_remote_code\s*=\s*True",
+        "severity": "CRITICAL",
+        "cwe": "CWE-94",
+        "desc": "Diffusers/model loading with trust_remote_code=True allows arbitrary code execution"
+    },
+    {
+        "name": "flax.serialization.from_bytes",
+        "regex": r"flax\.serialization\.from_bytes\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Flax from_bytes uses msgpack — may deserialize untrusted model state"
+    },
+    {
+        "name": "jax numpy load (allow_pickle)",
+        "regex": r"(?:jax\.numpy|jnp)\.load\s*\([^)]*allow_pickle\s*=\s*True",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "JAX numpy.load with allow_pickle=True enables arbitrary code execution"
+    },
+    {
+        "name": "tensorrt deserialize_cuda_engine",
+        "regex": r"(?:trt|tensorrt)\.Runtime\s*\([^)]*\)\.deserialize_cuda_engine\s*\(|deserialize_cuda_engine\s*\(",
+        "severity": "HIGH",
+        "cwe": "CWE-502",
+        "desc": "TensorRT engine deserialization can execute arbitrary CUDA kernels from untrusted .engine/.trt files"
+    },
+    {
+        "name": "mxnet model load",
+        "regex": r"(?:mx|mxnet)\.(?:nd\.load|model\.load_checkpoint|gluon\.nn\.SymbolBlock\.imports)\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "MXNet model loading may deserialize untrusted model parameters"
+    },
+    {
+        "name": "orbax checkpoint restore",
+        "regex": r"(?:orbax|CheckpointManager)\.(?:restore|load)\s*\(",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Orbax checkpoint restore may load untrusted serialized model state"
+    },
+    {
+        "name": "ultralytics YOLO load",
+        "regex": r"YOLO\s*\([^)]*(?:http|ftp|\.pt|\.engine)",
+        "severity": "MEDIUM",
+        "cwe": "CWE-502",
+        "desc": "Ultralytics YOLO model loading from untrusted .pt files uses pickle internally"
+    },
 ]
 
 MITIGATIONS = {
@@ -349,14 +478,37 @@ def _is_skip_line(stripped: str) -> bool:
     # Skip raise/assert statements referencing patterns in error messages
     if re.match(r'^\s*raise\s+\w+Error\s*\(["\']', stripped):
         return True
+    # Skip import statements (importing pickle isn't calling it)
+    if re.match(r'^\s*(?:from\s+\S+\s+)?import\s+', stripped):
+        return True
+    # Skip print statements that merely reference patterns
+    if re.match(r'^\s*print\s*\(', stripped):
+        return True
+    # Skip assert statements in test code
+    if re.match(r'^\s*assert\s+', stripped):
+        return True
+    # Skip decorator lines
+    if stripped.startswith('@'):
+        return True
+    # Skip type annotations and docstring-like variables
+    if re.match(r'^\s*\w+\s*:\s*str\s*=\s*["\']', stripped):
+        return True
+    # Skip f-string/format references in error messages
+    if re.match(r'^\s*(?:msg|message|err|error|warning)\s*=\s*[f"\']', stripped):
+        return True
     return False
+
+MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB — skip huge generated files
 
 def scan_file(filepath: str) -> List[Finding]:
     findings = []
     try:
+        size = os.path.getsize(filepath)
+        if size > MAX_FILE_SIZE:
+            return findings
         with open(filepath, 'r', errors='ignore') as f:
             lines = f.readlines()
-    except (PermissionError, IsADirectoryError):
+    except (PermissionError, IsADirectoryError, OSError):
         return findings
 
     in_multiline_string = False
@@ -515,7 +667,7 @@ def findings_to_sarif(findings: List[Finding], repo_path: str) -> dict:
             "tool": {
                 "driver": {
                     "name": "torchload-checker",
-                    "version": "0.8.0",
+                    "version": __version__,
                     "informationUri": "https://github.com/jeremysommerfeld8910-cpu/torchload-checker",
                     "rules": list(rules.values())
                 }
@@ -523,6 +675,44 @@ def findings_to_sarif(findings: List[Finding], repo_path: str) -> dict:
             "results": results
         }]
     }
+
+def get_git_changed_files(repo_path: str, diff_ref: str = "HEAD") -> List[str]:
+    """Get list of .py files changed relative to a git ref (branch, commit, tag)."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=ACMR", diff_ref, "--", "*.py"],
+            capture_output=True, text=True, cwd=repo_path
+        )
+        if result.returncode != 0:
+            # Try as branch comparison (e.g., "main")
+            result = subprocess.run(
+                ["git", "diff", "--name-only", "--diff-filter=ACMR", diff_ref + "...HEAD", "--", "*.py"],
+                capture_output=True, text=True, cwd=repo_path
+            )
+        files = [os.path.join(repo_path, f.strip()) for f in result.stdout.strip().split('\n') if f.strip()]
+        # Also include unstaged/untracked .py files
+        result2 = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=ACMR", "--", "*.py"],
+            capture_output=True, text=True, cwd=repo_path
+        )
+        unstaged = [os.path.join(repo_path, f.strip()) for f in result2.stdout.strip().split('\n') if f.strip()]
+        return list(set(files + unstaged))
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return []
+
+
+def scan_files(file_list: List[str], min_severity: str = "LOW") -> List[Finding]:
+    """Scan a specific list of files."""
+    sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    min_sev_val = sev_order.get(min_severity.upper(), 3)
+    all_findings = []
+    for filepath in file_list:
+        if os.path.isfile(filepath) and filepath.endswith('.py'):
+            findings = scan_file(filepath)
+            all_findings.extend(f for f in findings if sev_order.get(f.severity, 3) <= min_sev_val)
+    all_findings.sort(key=lambda f: sev_order.get(f.severity, 3))
+    return all_findings
+
 
 def main():
     parser = argparse.ArgumentParser(description="Scan repos for unsafe deserialization (CWE-502)")
@@ -542,15 +732,25 @@ def main():
     parser.add_argument("--fail-on", default=None,
                         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
                         help="Only exit non-zero if findings at this severity or above exist")
-    parser.add_argument("--version", action="version", version="torchload-checker 0.8.0")
+    parser.add_argument("--diff", metavar="REF", nargs="?", const="HEAD",
+                        help="Only scan .py files changed relative to a git ref (default: HEAD). "
+                             "Example: --diff main, --diff HEAD~3")
+    parser.add_argument("--version", action="version", version=f"torchload-checker {__version__}")
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):
         print(f"Error: {args.path} is not a directory", file=sys.stderr)
         sys.exit(1)
 
-    exclude = getattr(args, 'exclude_tests', False)
-    findings = scan_repo(args.path, args.severity, exclude_tests=exclude)
+    if args.diff is not None:
+        changed = get_git_changed_files(args.path, args.diff)
+        if not changed:
+            print(f"No changed .py files found relative to {args.diff}")
+            sys.exit(0)
+        findings = scan_files(changed, args.severity)
+    else:
+        exclude = getattr(args, 'exclude_tests', False)
+        findings = scan_repo(args.path, args.severity, exclude_tests=exclude)
     mitigations = check_mitigations(args.path)
 
     # Save baseline if requested

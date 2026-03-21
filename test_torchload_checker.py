@@ -1,7 +1,7 @@
 """Tests for torchload-checker."""
 import tempfile
 import os
-from torchload_checker import scan_file, scan_repo, check_mitigations, findings_to_sarif, Finding
+from torchload_checker import scan_file, scan_repo, scan_files, check_mitigations, findings_to_sarif, Finding
 
 def _write_temp(content):
     """Write content to a temp .py file and return path."""
@@ -326,6 +326,154 @@ def test_skips_logging_lines():
     findings = scan_file(path)
     os.unlink(path)
     assert len(findings) == 0
+
+
+def test_detects_hickle_load():
+    path = _write_temp('data = hickle.load("model.hkl")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("hickle" in f.pattern for f in findings)
+
+
+def test_detects_torch_load_pickle_module():
+    path = _write_temp('model = torch.load("m.pt", pickle_module=dill)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("pickle_module" in f.pattern for f in findings)
+
+
+def test_detects_skops_load_no_trusted():
+    path = _write_temp('model = skops.io.load("model.skops")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("skops" in f.pattern for f in findings)
+
+
+def test_skops_load_with_trusted_no_finding():
+    path = _write_temp('model = skops.io.load("model.skops", trusted=["sklearn.linear_model"])')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert not any("skops" in f.pattern for f in findings)
+
+
+def test_skips_import_statements():
+    path = _write_temp('import pickle\nfrom pickle import loads')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_skips_print_statements():
+    path = _write_temp('print("Loading model with torch.load(weights_only=False)")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_skips_assert_statements():
+    path = _write_temp('assert "pickle.load" in detected_patterns')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_skips_decorator_lines():
+    path = _write_temp('@pickle.load\ndef my_func(): pass')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_no_false_positive_safe_pickle():
+    """Prefixed pickle modules like safe_pickle should not trigger."""
+    path = _write_temp('data = safe_pickle.load(f)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert not any("pickle.load" in f.pattern for f in findings)
+
+
+def test_detects_distributed_checkpoint():
+    path = _write_temp('state = torch.distributed.checkpoint.load(model, storage)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("distributed" in f.pattern for f in findings)
+
+
+def test_detects_hf_auto_trust_remote():
+    path = _write_temp('model = AutoModelForCausalLM.from_pretrained("m", trust_remote_code=True)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any(f.severity == "CRITICAL" for f in findings)
+
+
+def test_skips_large_files():
+    """Files over 2MB should be skipped."""
+    path = _write_temp('pickle.load(f)\n' * 200000)  # ~3MB
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_skips_string_variable_assignments():
+    path = _write_temp('msg: str = "pickle.load is dangerous"')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert len(findings) == 0
+
+
+def test_detects_flax_from_bytes():
+    path = _write_temp('state = flax.serialization.from_bytes(target, data)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("flax" in f.pattern for f in findings)
+
+
+def test_detects_jax_numpy_allow_pickle():
+    path = _write_temp('data = jnp.load("weights.npy", allow_pickle=True)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("jax" in f.pattern for f in findings)
+
+
+def test_detects_tensorrt_deserialize():
+    path = _write_temp('engine = trt.Runtime(logger).deserialize_cuda_engine(data)')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("tensorrt" in f.pattern for f in findings)
+
+
+def test_detects_mxnet_load():
+    path = _write_temp('params = mx.nd.load("model-0000.params")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("mxnet" in f.pattern for f in findings)
+
+
+def test_detects_yolo_load():
+    path = _write_temp('model = YOLO("yolov8n.pt")')
+    findings = scan_file(path)
+    os.unlink(path)
+    assert any("YOLO" in f.pattern for f in findings)
+
+
+def test_scan_files_function():
+    """Test the scan_files helper for scanning a specific file list."""
+    with tempfile.TemporaryDirectory() as d:
+        f1 = os.path.join(d, "a.py")
+        f2 = os.path.join(d, "b.py")
+        with open(f1, "w") as f:
+            f.write('pickle.load(f)\n')
+        with open(f2, "w") as f:
+            f.write('import torch\nx = 1\n')
+        findings = scan_files([f1, f2])
+        assert len(findings) == 1
+        assert "a.py" in findings[0].file
+
+
+def test_pattern_count():
+    """Verify we have the expected number of patterns."""
+    from torchload_checker import PATTERNS
+    assert len(PATTERNS) == 59, f"Expected 59 patterns, got {len(PATTERNS)}"
 
 
 if __name__ == "__main__":

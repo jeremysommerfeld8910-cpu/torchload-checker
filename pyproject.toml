@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchload-checker"
-version = "0.8.0"
-description = "Scan Python repos for unsafe deserialization patterns (CWE-502/CWE-94) — 41 detection patterns"
+version = "0.11.0"
+description = "Scan Python repos for unsafe deserialization patterns (CWE-502/CWE-94) — 59 detection patterns"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
